@@ -1,0 +1,20 @@
+[build]
+rustflags = ["-C", "target-feature=+bmi2", "target-feature=+avx512f", "target-cpu=native"]
+
+[workspace]
+members = [
+	"boot/boot-macros",
+	"boot/boot",
+    "base/uefi",
+    "base/mm",
+    "base/amd64",
+	"xarm/decoder",
+	"xarm/decoder/isa-gen",
+	"xarm/decoder/isa-gen-nostd",
+	"xarm"
+]
+resolver = "2"
+
+[profile.release]
+debug=true
+

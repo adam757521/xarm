@@ -1,0 +1,11 @@
+[package]
+name = "xarm"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+mm = { path = "../base/mm" }
+amd64 = { path = "../base/amd64" }
+boot-macros = { path = "../boot/boot-macros" }
+boot = { path = "../boot/boot" }
+

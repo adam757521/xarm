@@ -1,0 +1,12 @@
+[package]
+name = "isa-gen"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+tar = "0.4.44"
+ureq = "3.2.0"
+quick-xml = "0.39.0"
+quote = "1.0.44"
+proc-macro2 = "1.0.106"
+isa-gen-nostd = { path = "../isa-gen-nostd" }

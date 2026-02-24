@@ -1,0 +1,17 @@
+[package]
+name = "boot"
+version = "0.1.0"
+edition = "2024"
+
+[profile.dev]
+panic = "abort"
+
+[profile.release]
+panic = "abort"
+
+[dependencies]
+uefi = { path = "../../base/uefi" }
+amd64 = { path = "../../base/amd64" }
+mm = { path = "../../base/mm" }
+strum = { version = "0.26", default-features = false, features = ["derive"] }
+bitfield = "0.19.4"

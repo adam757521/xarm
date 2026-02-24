@@ -1,0 +1,13 @@
+[package]
+name = "decoder"
+version = "0.1.0"
+edition = "2024"
+
+[build-dependencies]
+isa-gen = { path = "isa-gen" }
+syn = { version = "2.0", features = ["full"] }
+prettyplease = "0.2"
+
+[dependencies]
+isa-gen-nostd = { path = "isa-gen-nostd" }
+
