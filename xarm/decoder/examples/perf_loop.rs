@@ -79,12 +79,12 @@ fn start_test() {
 
     let start = std::time::Instant::now();
     let start_cycles = unsafe { std::arch::x86_64::_rdtsc() };
-    for _ in 0..(1_000_000_000/16) {
-        black_box(unsafe { playground(x_512, words_512) });
 
-        //black_box(unsafe { playground(x_512, words_512) });
-        //black_box(unsafe { playground(x_512, words_512) });
-        //black_box(unsafe { vpext512(words_512, x_512) } );
+    let iterations: usize = 01_000_000_000 / 16;
+    for _ in 0..iterations {
+
+        black_box(unsafe { playground(x_512, words_512) });
+        //black_box(unsafe { vpext512(words_512, x_512, 0x00FF) } );
         //black_box(unsafe { build_branch(x_512, words_512) });
 
         //black_box(unsafe { build_branch_zmms_8(x) });
@@ -101,7 +101,7 @@ fn start_test() {
     let end_cycles = unsafe { std::arch::x86_64::_rdtsc() } - start_cycles;
     let duration = start.elapsed();
     println!("{duration:?}. {end_cycles}");
-    println!("c/i: {}", end_cycles as f64 / 62_500_000.0);
+    println!("c/i: {}", end_cycles as f64 / iterations as f64);
 
 }
 

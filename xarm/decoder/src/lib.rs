@@ -76,6 +76,21 @@ pub unsafe fn debug_ymm(val: __m256i, label: &str) {
     println!("-------------------------------------------------------\n");
 }
 
+#[inline(never)]
+pub unsafe fn debug_xmm(val: __m128i, label: &str) {
+    let bytes: [u8; 16] = unsafe { std::mem::transmute(val) };
+    println!("--- ZMM DEBUG: {} ---", label);
+    
+    print!("{:02X} | ", 0);
+    for i in 0..16 {
+        print!("{:02X} ", bytes[i]);
+        if i == 7 { print!("| "); }
+    }
+    println!();
+
+    println!("-------------------------------------------------------\n");
+}
+
 // We are writing low level wrappers, but we should load all of this from memory aswell.
 
 // TODO: mask for the running instructions, instead of a recursive approach
@@ -102,6 +117,28 @@ pub unsafe fn find_rightmost_bit(masks: __m256i) -> __m256i {
     }
 }
 
+#[inline(always)]
+pub unsafe fn horizontal_max(values: __m512i) -> i32 {
+    // Finding the horizontal max is relatively simple, the trick is folding each time in half.
+    // We run a max on the vector, with a shifted version of itself. Think of it as "swapping
+    // halves", or ror
+    // v = [a, b, c, d]
+    // shifted = [c, d, a, b]
+    // max = [max(a, c), max(b, d), max(c, a), max(d,b)]
+
+    unsafe { 
+        // Align effectively does the swap for us.
+        let fold_256 = _mm512_castsi512_si256(_mm512_max_epi32(values, _mm512_alignr_epi32::<8>(values, values)));
+        // Swap halves.
+        let fold_128 = _mm256_max_epi32(fold_256, _mm256_shuffle_i32x4::<0xB1>(fold_256, fold_256));
+        // Unsure if this is the best practice with AVX512 extension.
+        let fold_64 = _mm256_max_epi32(fold_128, _mm256_shuffle_epi32::<0x4E>(fold_128));
+        let final_fold = _mm256_max_epi32(fold_64, _mm256_shuffle_epi32::<0xB1>(fold_64));
+
+        _mm256_cvtsi256_si32(final_fold)
+    }
+}
+
 // NOTE: we have a higher probability of the bits being at the top.
 // we can penalize in the isa-gen itself to not give us such big differences.
 
@@ -109,7 +146,7 @@ pub unsafe fn find_rightmost_bit(masks: __m256i) -> __m256i {
 //
 // http://www.0x80.pl/notesen/2025-01-05-simd-pdep-pext.html
 #[inline(always)]
-pub unsafe fn vpext512(words: __m512i, mut bitmasks: __m512i) -> __m512i {
+pub unsafe fn vpext512(words: __m512i, mut bitmasks: __m512i, mask: __mmask16) -> __m512i {
     // words -> i32x16
     // masks -> i32x16
     
@@ -122,13 +159,13 @@ pub unsafe fn vpext512(words: __m512i, mut bitmasks: __m512i) -> __m512i {
 
         // first_bit = (mask ^ (mask & (mask - 1)))
         let m0 = _mm512_sub_epi32(bitmasks, one);
-        let m1 = _mm512_and_si512(bitmasks, m0);
-        let first_bit = _mm512_xor_si512(bitmasks, m1);
+        let m1 = _mm512_and_epi32(bitmasks, m0);
+        let first_bit = _mm512_mask_xor_epi32(_mm512_set1_epi32(-1), mask, bitmasks, m1);
         
-        out = _mm512_or_si512(
+        out = _mm512_or_epi32(
             out, 
             _mm512_min_epu32(
-                _mm512_and_si512(
+                _mm512_and_epi32(
                     words,
                     first_bit
                 ),
@@ -139,24 +176,14 @@ pub unsafe fn vpext512(words: __m512i, mut bitmasks: __m512i) -> __m512i {
         bitmasks = m1;
         bit = _mm512_add_epi32(bit, bit);
 
-        let first_leftmost = _mm512_lzcnt_epi32(first_bit);
+        let leftmost = _mm512_lzcnt_epi32(first_bit);
 
-        let high_256 = _mm512_extracti32x8_epi32::<1>(first_leftmost);
-        let low_256  = _mm512_castsi512_si256(first_leftmost);
-        let max_8    = _mm256_max_epi32(low_256, high_256);
-
-        // TODO: verify here.
-        let max_4 = _mm256_max_epi32(max_8, _mm256_shuffle_i32x4::<0x4E>(max_8, max_8));
-        let max_2 = _mm256_max_epi32(max_4, _mm256_shuffle_epi32::<0x4E>(max_4));
-        let max_1 = _mm256_max_epi32(max_2, _mm256_shuffle_epi32::<0xB1>(max_2));
-
-        // TODO: if its 32, it should be a thing, we should add a mask to this function.
         // Is this the best approach? Is this off by one?
-        let rem = _mm256_cvtsi256_si32(max_1);
+        let rem = horizontal_max(leftmost);
         for _ in 0..rem {
             let m0 = _mm512_sub_epi32(bitmasks, one);
-            let m1 = _mm512_and_si512(bitmasks, m0);
-            let first_bit = _mm512_xor_si512(bitmasks, m1);
+            let m1 = _mm512_and_epi32(bitmasks, m0);
+            let first_bit = _mm512_xor_epi32(bitmasks, m1);
             
             out = _mm512_or_si512(
                 out, 
@@ -230,8 +257,7 @@ macro_rules! pzmm {
             //"korw k1, k1, k3\n",
 
             // This is slow. maybe well find a better solution
-            "vpshufd xmm11, xmm", $zmm_src, ", 0x01\n",
-            "vpbroadcastd zmm10 {{k2}}, xmm11\n",
+            "vpbroadcastd zmm10 {{k2}}, xmm", $zmm_src, "\n",
 
             "vpshufd xmm11, xmm", $zmm_src, ", 0x01\n",
             "vpbroadcastd zmm13 {{k2}}, xmm11\n",
@@ -256,7 +282,7 @@ pub unsafe fn playground(ndxs: __m512i, words: __m512i) {
         // using a bigger size?
         // This is somewhat a problem since we need it as zeros for the lookups.
 
-        let branch_mask: __mmask16;
+        let lookup_mask: __mmask16;
         let bitmasks: __m512i;
         let expected: __m512i;
         let branches: __m512i;
@@ -323,7 +349,7 @@ pub unsafe fn playground(ndxs: __m512i, words: __m512i) {
             pzmm!(14, 30),
             pzmm!(15, 31),
 
-            // Setup branch_mask trivially with vmovd2m or whatever the fuck they called it
+            "vpmovd2m k1, zmm10",
 
             ndx_zmm = in(zmm_reg) ndxs,
             table = in(reg) &_generated::DECODER_POOL,
@@ -331,7 +357,7 @@ pub unsafe fn playground(ndxs: __m512i, words: __m512i) {
             // Allocations
             offset = out(reg) _,
 
-            out("k1") branch_mask,
+            out("k1") lookup_mask,
 
             // Temporary allocations
             out("k2") _,
@@ -363,10 +389,9 @@ pub unsafe fn playground(ndxs: __m512i, words: __m512i) {
             out("zmm31") _,
         );
 
-        // Mask PEXT
-
         // TODO: how can we guarantee that vpext doesnt just use our own registers
-        black_box(vpext512(words, bitmasks));
+        // VPEXT adds 70 cycles maximum.
+        black_box(vpext512(words, bitmasks, lookup_mask));
 
         /*
         debug_zmm(bitmasks, "bitmasks");
@@ -424,7 +449,7 @@ pub unsafe fn build_branch(ndxs: __m512i, words: __m512i) -> Branch {
             decoder_table.add(3)
         );
 
-        let entry_ndxs = vpext512(words, _mm512_maskz_mov_epi32(!branch_mask, bitmasks));
+        let entry_ndxs = vpext512(words, bitmasks, !branch_mask);
 
         // We don't care about writing the top 16 bits.
         let entries = _mm512_mask_i32gather_epi32::<1>(
