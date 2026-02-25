@@ -283,11 +283,16 @@ pub unsafe fn playground(ndxs: __m512i, words: __m512i) {
         // This is somewhat a problem since we need it as zeros for the lookups.
 
         let lookup_mask: __mmask16;
-        let bitmasks: __m512i;
-        let expected: __m512i;
-        let branches: __m512i;
+        let mut bitmasks: __m512i;
+        let mut expected: __m512i;
+        let mut branches: __m512i;
 
-        // Grouping port usage seemed to work great. 4.14 IPC on Zen5
+        let z0: __m512i; let z1: __m512i; let z2: __m512i; let z3: __m512i;
+        let z4: __m512i; let z5: __m512i; let z6: __m512i; let z7: __m512i;
+        let z8: __m512i; let z9: __m512i; let z10: __m512i; let z11: __m512i;
+        let z12: __m512i; let z13: __m512i; let z14: __m512i; let z15: __m512i;
+
+        // Grouping port usage seemed to work great unintuitively. 4.14 IPC on Zen5
         arch::asm!(
             // Remove this from here
             //"vpslld {ndx_zmm}, {ndx_zmm}, 6",
@@ -371,27 +376,65 @@ pub unsafe fn playground(ndxs: __m512i, words: __m512i) {
             out("zmm15") branches,
 
             // Cache line for each instruction.
-            out("zmm16") _,
-            out("zmm17") _,
-            out("zmm18") _,
-            out("zmm19") _,
-            out("zmm20") _,
-            out("zmm21") _,
-            out("zmm22") _,
-            out("zmm23") _,
-            out("zmm24") _,
-            out("zmm25") _,
-            out("zmm26") _,
-            out("zmm27") _,
-            out("zmm28") _,
-            out("zmm29") _,
-            out("zmm30") _,
-            out("zmm31") _,
+            out("zmm16") z0,
+            out("zmm17") z1,
+            out("zmm18") z2,
+            out("zmm19") z3,
+            out("zmm20") z4,
+            out("zmm21") z5,
+            out("zmm22") z6,
+            out("zmm23") z7,
+            out("zmm24") z8,
+            out("zmm25") z9,
+            out("zmm26") z10,
+            out("zmm27") z11,
+            out("zmm28") z12,
+            out("zmm29") z13,
+            out("zmm30") z14,
+            out("zmm31") z15,
         );
 
         // TODO: how can we guarantee that vpext doesnt just use our own registers
+
         // VPEXT adds 70 cycles maximum.
-        black_box(vpext512(words, bitmasks, lookup_mask));
+        // VPEXT makes the LUT overrated
+        // unless we have better heuristics its better to branch. branching is insanely cheap.
+
+        let entry_ndxs = vpext512(words, bitmasks, lookup_mask);
+
+        bitmasks = _mm512_maskz_mov_epi32(!lookup_mask, bitmasks);
+        expected = _mm512_maskz_mov_epi32(!lookup_mask, expected);
+        // branches = _mm512_maskz_mov_epi32(lookup_mask, branches);
+
+        // alright im writing slop, but the idea is this:
+        // before loop:
+        // ndxs + (padding to start of LUT)
+        //
+        // in loop:
+        // mask = incrementing
+        // each time we copy mask, and it with the original.
+        // then we basically branches[mask] = entry_ndxs[mask] + base_zmm (using vpermw/d)
+        //
+        //        // For each one:
+        // - If its in the mask, extract its ndx and shift to position
+        // - same trick with incrementing mask is likely best, we just have to and it with the
+        // original mask
+        // - but there might be a problem with a
+        arch::asm!(
+            "mov {offset:e}, 1",
+            "kmovw k2, {offset:e}",
+            // This instruction is goated, but my logic is shit
+            // note: not k2, but k2 & lookup_mask
+            "vpshufd {temp}, , 0x02\n",
+            "vpbroadcastd {temp}, "
+            "vpermw {branches} {{k2}}",
+            "kshiftlw k2, k2, 1",
+            offset = out(reg) _,
+            temp = out(reg) _,
+            branches = in(zmm_reg) branches,
+            z0 = in(zmm_reg) z0,
+
+        );
 
         /*
         debug_zmm(bitmasks, "bitmasks");
@@ -413,7 +456,8 @@ pub unsafe fn build_branch(ndxs: __m512i, words: __m512i) -> Branch {
 
         let decoder_table = &_generated::DECODER_POOL as *const _ as *const i32;
         // Scale by 64.
-        let ndxs = _mm512_slli_epi32(ndxs, 6);
+        // TODO: watch out for scale
+        let ndxs = _mm512_slli_epi32(ndxs, 3);
 
         // Structure is Branch.
         // perhaps the things here can be SoA..
@@ -432,7 +476,7 @@ pub unsafe fn build_branch(ndxs: __m512i, words: __m512i) -> Branch {
         //let branch_masked = black_box(_mm512_movepi32_mask(_mm512_slli_epi32(types, 31)));
         
         // LOAD INTO 16 ZMMS is the real solution.
-        let branch_mask: __mmask16 = _mm512_testn_epi32_mask(types, types);
+        let branch_mask: __mmask16 = _mm512_movepi32_mask(types);
         //println!("{branch_mask}");
 
         let branch_bitmasks = _mm512_maskz_mov_epi32(branch_mask, bitmasks);

@@ -45,7 +45,7 @@ fn start_test() {
 
     //let x = _mm512_setzero_si512();
     //let x = _mm512_set1_epi32(2);
-    let x_512 = _mm512_set1_epi32(0x40);
+    let x_512 = _mm512_set1_epi32(0x40 * 1);
     let words_512 = _mm512_set1_epi32(1123123);
     //let words_512 = black_box(_mm512_set1_epi32(0));
     //0b00001000
