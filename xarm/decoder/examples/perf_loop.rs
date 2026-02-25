@@ -43,28 +43,49 @@ fn start_test() {
 
     ];
 
-    // TODO: I CAN LOAD SHIT INTO XMM. L1 hit is gone, i only pay for one
-    // SOA, it can be relevant here, very relevant.
-
     //let x = _mm512_setzero_si512();
     //let x = _mm512_set1_epi32(2);
-    let x_512 = black_box(_mm512_set1_epi32(1));
-    let words_512 = black_box(_mm512_set1_epi32(1123123));
+    let x_512 = _mm512_set1_epi32(0x40);
+    let words_512 = _mm512_set1_epi32(1123123);
     //let words_512 = black_box(_mm512_set1_epi32(0));
     //0b00001000
-    let masks_512 = black_box(_mm512_set1_epi32(0b110000000000000000000000));
+    //let masks_512 = _mm512_set1_epi32(0b110000000000000000000000);
 
-    let x_256 = black_box(_mm256_set1_epi32(2));
-    let masks_256 = black_box(_mm256_set1_epi32(0b00));
+    //let x_256 = _mm256_set1_epi32(2);
+    //let masks_256 = _mm256_set1_epi32(0b00);
 
     //let res = unsafe { vpext512(x_512, masks_512) };
     //unsafe { debug_ymm(find_lead_bit(masks), "x") };
     //unsafe { debug_zmm(res, "x"); };
     //unsafe { build_branch_zmms(x) };
 
+    //black_box(unsafe { playground(x_512, masks_512) } );
+
+    /*
+    unsafe {
+        core::arch::asm!(
+            "vpslld {ndx_zmm}, {ndx_zmm}, 6",
+            ndx_zmm = in(zmm_reg) x_512,
+        );
+    }*/
+
+    /*
+    black_box(unsafe { playground(x_512, words_512) });
+    black_box(unsafe { playground(x_512, words_512) });
+    black_box(unsafe { playground(x_512, words_512) });
+    black_box(unsafe { playground(x_512, words_512) });
+    black_box(unsafe { playground(x_512, words_512) });
+    black_box(unsafe { playground(x_512, words_512) });*/
+
+    let start = std::time::Instant::now();
+    let start_cycles = unsafe { std::arch::x86_64::_rdtsc() };
     for _ in 0..(1_000_000_000/16) {
+        black_box(unsafe { playground(x_512, words_512) });
+
+        //black_box(unsafe { playground(x_512, words_512) });
+        //black_box(unsafe { playground(x_512, words_512) });
         //black_box(unsafe { vpext512(words_512, x_512) } );
-        black_box(unsafe { build_branch(x_512, words_512) });
+        //black_box(unsafe { build_branch(x_512, words_512) });
 
         //black_box(unsafe { build_branch_zmms_8(x) });
         //core::hint::black_box(unsafe { hotpath_decode_3(x) });
@@ -76,6 +97,11 @@ fn start_test() {
         //black_box(unsafe { hotpath_decode(word) });
         //println!("h");
     }
+
+    let end_cycles = unsafe { std::arch::x86_64::_rdtsc() } - start_cycles;
+    let duration = start.elapsed();
+    println!("{duration:?}. {end_cycles}");
+    println!("c/i: {}", end_cycles as f64 / 62_500_000.0);
 
 }
 

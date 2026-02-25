@@ -40,20 +40,41 @@ impl DescriptorEntry {
     }
 }
 
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct LookupData {
+    pub bitmask: u32,
+    pub _hint: u32,
+    pub entries: [DescriptorEntry; 16]
+}
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct BranchData {
+    // TODO: Two-ahead, Three-ahead
+    pub bitmask: u32,
+    pub expected: u32,
+    pub then: DescriptorEntry,
+    pub r#else: DescriptorEntry,
+}
+
 #[repr(C, align(64))]
-#[derive(Debug, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub enum Descriptor {
-    Branch {
-        // TODO: Two-ahead, Three-ahead
-        bitmask: u32,
-        expected: u32,
-        then: DescriptorEntry,
-        r#else: DescriptorEntry,
-    },
-    Lookup {
-        bitmask: u32,
-        hint: u32,
-        entries: [DescriptorEntry; 16]
-    },
+    Branch(BranchData),
+    Lookup(LookupData),
     Empty
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub union InnerData {
+    pub lookup: LookupData,
+    pub branch: BranchData
+}
+
+#[repr(C, align(64))]
+pub struct Entry {
+    pub tag: u32,
+    pub data: InnerData
 }

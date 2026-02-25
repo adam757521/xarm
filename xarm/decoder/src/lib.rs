@@ -12,6 +12,7 @@ pub mod _generated {
 pub use _generated::InstructionView;
 use arch::x86_64::*;
 
+/*
 #[inline(always)]
 pub unsafe fn hotpath_decode_1(word: u32) -> u16 {
     unsafe {
@@ -37,6 +38,7 @@ pub unsafe fn hotpath_decode_1(word: u32) -> u16 {
         }
     }
 }
+*/
 
 #[inline(never)]
 pub unsafe fn debug_zmm(val: __m512i, label: &str) {
@@ -175,6 +177,7 @@ pub unsafe fn vpext512(words: __m512i, mut bitmasks: __m512i) -> __m512i {
     }
 }
 
+
 #[inline(always)]
 pub unsafe fn vpext512_hardcoded(words: __m512i, mut bitmasks: __m512i) -> __m512i {
     // words -> i32x16
@@ -216,6 +219,160 @@ pub struct Branch {
     expected: __m512i,
     // Low 16 -> then, High 16 -> else
     paths: __m512i
+}
+
+macro_rules! pzmm {
+    ($idx:expr, $zmm_src:expr) => {
+        concat!(
+            //"vpbroadcastd zmm12, xmm", $zmm_src, "\n",
+            //"vpmovd2m k3, zmm12\n",
+            //"kandw k3, k3, k2\n",
+            //"korw k1, k1, k3\n",
+
+            // This is slow. maybe well find a better solution
+            "vpshufd xmm11, xmm", $zmm_src, ", 0x01\n",
+            "vpbroadcastd zmm10 {{k2}}, xmm11\n",
+
+            "vpshufd xmm11, xmm", $zmm_src, ", 0x01\n",
+            "vpbroadcastd zmm13 {{k2}}, xmm11\n",
+
+            "vpshufd xmm11, xmm", $zmm_src, ", 0x02\n",
+            "vpbroadcastd zmm14 {{k2}}, xmm11\n",
+
+            "vpshufd xmm11, xmm", $zmm_src, ", 0x03\n",
+            "vpbroadcastd zmm15 {{k2}}, xmm11\n",
+
+            "kshiftlw k2, k2, 1\n",
+        )
+    }
+}
+
+#[inline(always)]
+pub unsafe fn playground(ndxs: __m512i, words: __m512i) {
+    // ndxs -> u32x16
+
+    unsafe {
+        // Building Expected/Branches: Alignment is a big one, can save an instruction maybe by
+        // using a bigger size?
+        // This is somewhat a problem since we need it as zeros for the lookups.
+
+        let branch_mask: __mmask16;
+        let bitmasks: __m512i;
+        let expected: __m512i;
+        let branches: __m512i;
+
+        // Grouping port usage seemed to work great. 4.14 IPC on Zen5
+        arch::asm!(
+            // Remove this from here
+            //"vpslld {ndx_zmm}, {ndx_zmm}, 6",
+
+            "vmovd {offset:e}, {ndx_zmm:x}",
+            "vmovdqa64 zmm16, [{table}+{offset}]",
+            "vpextrd {offset:e}, {ndx_zmm:x}, 1",
+            "vmovdqa64 zmm17, [{table}+{offset}]",
+            "vpextrd {offset:e}, {ndx_zmm:x}, 2",
+            "vmovdqa64 zmm18, [{table}+{offset}]",
+            "vpextrd {offset:e}, {ndx_zmm:x}, 3",
+            "vmovdqa64 zmm19, [{table}+{offset}]",
+            "vpextrd {offset:e}, {ndx_zmm:x}, 4",
+            "vmovdqa64 zmm20, [{table}+{offset}]",
+            "vpextrd {offset:e}, {ndx_zmm:x}, 5",
+            "vmovdqa64 zmm21, [{table}+{offset}]",
+            "vpextrd {offset:e}, {ndx_zmm:x}, 6",
+            "vmovdqa64 zmm22, [{table}+{offset}]",
+            "vpextrd {offset:e}, {ndx_zmm:x}, 7",
+            "vmovdqa64 zmm23, [{table}+{offset}]",
+            "vpextrd {offset:e}, {ndx_zmm:x}, 8",
+            "vmovdqa64 zmm24, [{table}+{offset}]",
+            "vpextrd {offset:e}, {ndx_zmm:x}, 9",
+            "vmovdqa64 zmm25, [{table}+{offset}]",
+            "vpextrd {offset:e}, {ndx_zmm:x}, 10",
+            "vmovdqa64 zmm26, [{table}+{offset}]",
+            "vpextrd {offset:e}, {ndx_zmm:x}, 11",
+            "vmovdqa64 zmm27, [{table}+{offset}]",
+            "vpextrd {offset:e}, {ndx_zmm:x}, 12",
+            "vmovdqa64 zmm28, [{table}+{offset}]",
+            "vpextrd {offset:e}, {ndx_zmm:x}, 13",
+            "vmovdqa64 zmm29, [{table}+{offset}]",
+            "vpextrd {offset:e}, {ndx_zmm:x}, 14",
+            "vmovdqa64 zmm30, [{table}+{offset}]",
+            "vpextrd {offset:e}, {ndx_zmm:x}, 15",
+            "vmovdqa64 zmm31, [{table}+{offset}]",
+
+            "vpxord zmm15, zmm15, zmm15",
+            "vpxord zmm14, zmm14, zmm14",
+            "vpxord zmm13, zmm13, zmm13",
+
+            "mov {offset:e}, 1",
+            "kmovw k2, {offset:e}",
+
+            pzmm!(0, 16),
+            pzmm!(1, 17),
+            pzmm!(2, 18),
+            pzmm!(3, 19),
+            pzmm!(4, 20),
+            pzmm!(5, 21),
+            pzmm!(6, 22),
+            pzmm!(7, 23),
+            pzmm!(8, 24),
+            pzmm!(9, 25),
+            pzmm!(10, 26),
+            pzmm!(11, 27),
+            pzmm!(12, 28),
+            pzmm!(13, 29),
+            pzmm!(14, 30),
+            pzmm!(15, 31),
+
+            // Setup branch_mask trivially with vmovd2m or whatever the fuck they called it
+
+            ndx_zmm = in(zmm_reg) ndxs,
+            table = in(reg) &_generated::DECODER_POOL,
+
+            // Allocations
+            offset = out(reg) _,
+
+            out("k1") branch_mask,
+
+            // Temporary allocations
+            out("k2") _,
+            //out("k3") _,
+            out("zmm10") _,
+            out("zmm11") _,
+            out("zmm12") _,
+
+            out("zmm13") bitmasks,
+            out("zmm14") expected,
+            out("zmm15") branches,
+
+            // Cache line for each instruction.
+            out("zmm16") _,
+            out("zmm17") _,
+            out("zmm18") _,
+            out("zmm19") _,
+            out("zmm20") _,
+            out("zmm21") _,
+            out("zmm22") _,
+            out("zmm23") _,
+            out("zmm24") _,
+            out("zmm25") _,
+            out("zmm26") _,
+            out("zmm27") _,
+            out("zmm28") _,
+            out("zmm29") _,
+            out("zmm30") _,
+            out("zmm31") _,
+        );
+
+        // Mask PEXT
+
+        // TODO: how can we guarantee that vpext doesnt just use our own registers
+        black_box(vpext512(words, bitmasks));
+
+        /*
+        debug_zmm(bitmasks, "bitmasks");
+        debug_zmm(expected, "ebitmasks");
+        debug_zmm(branches, "bbitmasks");*/
+    }
 }
 
 #[inline(always)]

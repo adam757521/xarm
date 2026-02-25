@@ -1,7 +1,7 @@
 use super::graph::Node;
 use crate::ir;
 
-use isa_gen_nostd::{Descriptor, DescriptorEntry};
+use isa_gen_nostd::{Descriptor, DescriptorEntry, BranchData, LookupData};
 
 pub fn add_to_l1(insts: &[&ir::Instruction], entry: &Node, desc_pool: &mut Vec<Descriptor>, l1: &mut Vec<Descriptor>) {
     // TODO: Probably no duplicates here, right
@@ -16,19 +16,19 @@ pub fn add_to_l1(insts: &[&ir::Instruction], entry: &Node, desc_pool: &mut Vec<D
                 }
             }
 
-            l1.push(Descriptor::Lookup {
+            l1.push(Descriptor::Lookup(LookupData {
                 bitmask: bits.iter().fold(0u32, |mask, &i| mask | (1 << i)),
-                hint: 0,
+                _hint: 0,
                 entries: mapped_entries
-            });
+            }));
         }
         Node::Branch { bitmask, value, then, r#else } => {
-            l1.push(Descriptor::Branch {
+            l1.push(Descriptor::Branch(BranchData {
                 bitmask: *bitmask,
                 expected: *value,
                 then: add_entry_as_descriptor(insts, then, desc_pool),
                 r#else: add_entry_as_descriptor(insts, r#else, desc_pool)
-            });
+            }));
         }
         _ => unreachable!()
     }
@@ -51,11 +51,11 @@ pub fn add_entry_as_descriptor(insts: &[&ir::Instruction], entry: &Node, descs_l
                 }
             }
 
-            descs_lut[placeholder] = Descriptor::Lookup {
+            descs_lut[placeholder] = Descriptor::Lookup(LookupData {
                 bitmask: bits.iter().fold(0u32, |mask, &i| mask | (1 << i)),
-                hint: 0,
+                _hint: 0,
                 entries: mapped_entries
-            };
+            });
             lookup_entry_descriptor
         }
         Node::Branch { bitmask, value, then, r#else } => {
@@ -63,12 +63,12 @@ pub fn add_entry_as_descriptor(insts: &[&ir::Instruction], entry: &Node, descs_l
             let branch_entry_descriptor = DescriptorEntry::new_branch(placeholder as u16);
             descs_lut.push(Descriptor::Empty);
 
-            descs_lut[placeholder] = Descriptor::Branch {
+            descs_lut[placeholder] = Descriptor::Branch(BranchData {
                 bitmask: *bitmask,
                 expected: *value,
                 then: add_entry_as_descriptor(insts, then, descs_lut),
                 r#else: add_entry_as_descriptor(insts, r#else, descs_lut)
-            };
+            });
             branch_entry_descriptor
         }
         Node::Leaf(inst) => {
@@ -110,12 +110,12 @@ pub fn build(instructions: &[&ir::Instruction], entry_node: Node) -> (u32, Vec<D
     let mut first_level_descriptors = Vec::with_capacity(1usize << bits.len());
 
     let zero_desc_entry = DescriptorEntry::new_branch(0);
-    let mut descriptor_pool = vec![Descriptor::Branch {
+    let mut descriptor_pool = vec![Descriptor::Branch(BranchData {
         bitmask: 0,
         expected: 0,
         then: zero_desc_entry,
         r#else: zero_desc_entry
-    }];
+    })];
 
     for entry in first_level_iter {
         assert!(!matches!(entry, Node::Leaf(_)));
@@ -123,6 +123,7 @@ pub fn build(instructions: &[&ir::Instruction], entry_node: Node) -> (u32, Vec<D
         //first_level_descriptors.push(add_entry_as_descriptor(instructions, &entry, &mut descriptor_pool));
     }
 
+    /*
     let mut bitmasks = vec![];
 
     for e in &first_level_descriptors {
@@ -136,7 +137,7 @@ pub fn build(instructions: &[&ir::Instruction], entry_node: Node) -> (u32, Vec<D
 
     for p in bitmasks {
         println!("{p:032b}");
-    }
+    }*/
     // TODO: a few approaches, either precompute the worst case scenario in each level - or hard
     // code it.
     // if we precompute, where do we store? tf? another memory access?

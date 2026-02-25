@@ -2,42 +2,58 @@ pub mod graph;
 pub mod lut;
 pub mod instruction;
 
-use isa_gen_nostd::{Descriptor, DescriptorEntry};
+use isa_gen_nostd::Descriptor;
 use crate::emitter::traits::CodeEmitter;
 use quote::quote;
 use proc_macro2::TokenStream;
 
 fn emit_use() -> TokenStream {
     quote! {
-        use isa_gen_nostd::{Descriptor, DescriptorEntry};
+        use isa_gen_nostd::{Entry, DescriptorEntry, InnerData, BranchData, LookupData};
     }
 }
 
 fn const_desc(d: &Descriptor) -> TokenStream {
     match d {
-        Descriptor::Branch { bitmask, expected, then, r#else } => {
-            let then_raw = then.0;
-            let else_raw = r#else.0;
+        Descriptor::Branch(branch) => {
+            let then_raw = branch.then.0;
+            let else_raw = branch.r#else.0;
+            let bbm = branch.bitmask;
+            let bex = branch.expected;
             quote! { 
-                Descriptor::Branch { 
-                    bitmask: #bitmask, 
-                    expected: #expected, 
-                    then: DescriptorEntry(#then_raw), 
-                    r#else: DescriptorEntry(#else_raw) 
+                Entry { 
+                    tag: 0,
+                    data: InnerData {
+                        branch: BranchData {
+                            bitmask: #bbm, 
+                            expected: #bex, 
+                            then: DescriptorEntry(#then_raw), 
+                            r#else: DescriptorEntry(#else_raw) 
+                        }
+                    }
+                }
+            }
+        }
+        Descriptor::Lookup(lookup) => {
+            let entry_raws = lookup.entries.iter().map(|e| e.0);
+            let bm = lookup.bitmask;
+            let hint = lookup._hint;
+            quote! { 
+                Entry { 
+                    tag: 0x8000_0000,
+                    data: InnerData {
+                        lookup: LookupData {
+                            bitmask: #bm, 
+                            _hint: #hint,
+                            entries: [#(DescriptorEntry(#entry_raws)),*] 
+                        }
+                    }
                 } 
             }
         }
-        Descriptor::Lookup { bitmask, hint, entries } => {
-            let entry_raws = entries.iter().map(|e| e.0);
-            quote! { 
-                Descriptor::Lookup { 
-                    bitmask: #bitmask, 
-                    hint: #hint,
-                    entries: [#(DescriptorEntry(#entry_raws)),*] 
-                } 
-            }
-        }
-        Descriptor::Empty => quote! { Descriptor::Empty },
+        // TODO: we have to handle empty descriptors better.
+        // THIS IS GOING TO FUCKING BYTE ME IN THE ASS
+        Descriptor::Empty => quote! { Entry { tag: 0, lookup: unsafe { std::mem::zeroed() } } },
     }
 }
 
@@ -49,11 +65,11 @@ fn emit_descriptors(root_bit: u32, pool: Vec<Descriptor>, descriptors: Vec<Descr
     let l1_len = descriptors.len();
 
     quote! {
-        pub static DECODER_POOL: [Descriptor; #pool_len] = [
+        pub static DECODER_POOL: [Entry; #pool_len] = [
             #(#pool_consts),*
         ];
 
-        pub static ROOT_DESCS: [Descriptor; #l1_len] = [
+        pub static ROOT_DESCS: [Entry; #l1_len] = [
             #(#l1_consts),*
         ];
 
@@ -79,6 +95,7 @@ impl CodeEmitter for LatencyOptimizedCodeEmitter {
         let usage = emit_use();
         let inst_enum = instruction::emit(&patterns);
         let descriptors = emit_descriptors(b, pool, descriptors);
+        dbg!(descriptors.to_string());
         quote! {
             #usage
 
