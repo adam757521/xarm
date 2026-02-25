@@ -249,26 +249,29 @@ pub struct Branch {
 }
 
 macro_rules! pzmm {
-    ($idx:expr, $zmm_src:expr) => {
+    ($idx:expr, $zmm_src:expr, $mask:expr) => {
         concat!(
             //"vpbroadcastd zmm12, xmm", $zmm_src, "\n",
             //"vpmovd2m k3, zmm12\n",
             //"kandw k3, k3, k2\n",
             //"korw k1, k1, k3\n",
 
-            // This is slow. maybe well find a better solution
-            "vpbroadcastd zmm10 {{k2}}, xmm", $zmm_src, "\n",
+            "mov {offset:e}, ", $idx, "\n",
+            "kmovw k", $mask, ", {offset:e}\n",
+
+            "vpbroadcastd zmm13 {{k", $mask, "}}, xmm", $zmm_src, "\n",
 
             "vpshufd xmm11, xmm", $zmm_src, ", 0x01\n",
-            "vpbroadcastd zmm13 {{k2}}, xmm11\n",
+            "vpbroadcastd zmm13 {{k", $mask, "}}, xmm11\n", 
+            //"vpord zmm13 {{k2}}, zmm13, zmm11\n",
 
             "vpshufd xmm11, xmm", $zmm_src, ", 0x02\n",
-            "vpbroadcastd zmm14 {{k2}}, xmm11\n",
+            "vpbroadcastd zmm14 {{k", $mask, "}}, xmm11\n", 
+            //"vpord zmm14 {{k2}}, zmm14, zmm11\n",
 
             "vpshufd xmm11, xmm", $zmm_src, ", 0x03\n",
-            "vpbroadcastd zmm15 {{k2}}, xmm11\n",
-
-            "kshiftlw k2, k2, 1\n",
+            "vpbroadcastd zmm15 {{k", $mask, "}}, xmm11\n", 
+            //"vpord zmm15 {{k2}}, zmm15, zmm11\n",
         )
     }
 }
@@ -297,6 +300,9 @@ pub unsafe fn playground(ndxs: __m512i, words: __m512i) {
             // Remove this from here
             //"vpslld {ndx_zmm}, {ndx_zmm}, 6",
 
+            // I am almost sure these retire in 7 cycles.
+            // Trying to force the CPU to "serialize" the load buffer by basically noping
+            // on those zmms gave only a slight cycle increase
             "vmovd {offset:e}, {ndx_zmm:x}",
             "vmovdqa64 zmm16, [{table}+{offset}]",
             "vpextrd {offset:e}, {ndx_zmm:x}, 1",
@@ -329,30 +335,33 @@ pub unsafe fn playground(ndxs: __m512i, words: __m512i) {
             "vmovdqa64 zmm30, [{table}+{offset}]",
             "vpextrd {offset:e}, {ndx_zmm:x}, 15",
             "vmovdqa64 zmm31, [{table}+{offset}]",
+            
 
             "vpxord zmm15, zmm15, zmm15",
             "vpxord zmm14, zmm14, zmm14",
             "vpxord zmm13, zmm13, zmm13",
 
+            /*
             "mov {offset:e}, 1",
-            "kmovw k2, {offset:e}",
+            "kmovw k2, {offset:e}",*/
 
-            pzmm!(0, 16),
-            pzmm!(1, 17),
-            pzmm!(2, 18),
-            pzmm!(3, 19),
-            pzmm!(4, 20),
-            pzmm!(5, 21),
-            pzmm!(6, 22),
-            pzmm!(7, 23),
-            pzmm!(8, 24),
-            pzmm!(9, 25),
-            pzmm!(10, 26),
-            pzmm!(11, 27),
-            pzmm!(12, 28),
-            pzmm!(13, 29),
-            pzmm!(14, 30),
-            pzmm!(15, 31),
+            pzmm!(0, 16, 1),
+            pzmm!(1, 17, 2),
+            pzmm!(2, 18, 3),
+            pzmm!(3, 19, 4),
+            pzmm!(4, 20, 5),
+            pzmm!(5, 21, 6),
+            pzmm!(6, 22, 7),
+            //pzmm!(7, 23, 8),
+            /*
+            pzmm!(8, 24, 1),
+            pzmm!(9, 25, 2),
+            pzmm!(10, 26, 3),
+            pzmm!(11, 27, 4),
+            pzmm!(12, 28, 5),
+            pzmm!(13, 29, 6),
+            pzmm!(14, 30, 7),*/
+            //pzmm!(15, 31),
 
             "vpmovd2m k1, zmm10",
 
@@ -400,8 +409,9 @@ pub unsafe fn playground(ndxs: __m512i, words: __m512i) {
         // VPEXT makes the LUT overrated
         // unless we have better heuristics its better to branch. branching is insanely cheap.
 
-        let entry_ndxs = vpext512(words, bitmasks, lookup_mask);
+        //let entry_ndxs = black_box(vpext512(words, bitmasks, lookup_mask));
 
+        /*
         bitmasks = _mm512_maskz_mov_epi32(!lookup_mask, bitmasks);
         expected = _mm512_maskz_mov_epi32(!lookup_mask, expected);
         // branches = _mm512_maskz_mov_epi32(lookup_mask, branches);
@@ -434,7 +444,7 @@ pub unsafe fn playground(ndxs: __m512i, words: __m512i) {
             branches = in(zmm_reg) branches,
             z0 = in(zmm_reg) z0,
 
-        );
+        );*/
 
         /*
         debug_zmm(bitmasks, "bitmasks");
