@@ -7,8 +7,8 @@ use isa_gen::emitter::traits::CodeEmitter;
 
 fn main() {
     let out_dir = env::var_os("OUT_DIR").unwrap();
-    let dest_path = Path::new(&out_dir).join("a32.rs");
 
+    let dest_path = Path::new(&out_dir).join("a32.rs");
     let tokens = LatencyOptimizedCodeEmitter::emit();
 
     let syntax_tree = syn::parse2(tokens)

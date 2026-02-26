@@ -1,7 +1,7 @@
 //#![cfg_attr(not(test), no_std)]
 
 use core::{arch, hint::black_box};
-use isa_gen_nostd::{Descriptor, DescriptorEntry};
+use isa_gen_nostd::{Descriptor, Entry};
 
 pub mod _generated {
     #![allow(non_camel_case_types)]
@@ -249,33 +249,232 @@ pub struct Branch {
 }
 
 macro_rules! pzmm {
-    ($idx:expr, $zmm_src:expr, $mask:expr) => {
-        concat!(
+    ($idx:expr, $mask:expr) => {
+        // Vector solution:
+        // We have to take all ZMMs, push the XMM to a register, (maybe precomputed masks)
+        // We likely can double pump it
+        // Might just use align to
+        // build here
+
+        //2217 AVX2                :{VEX}  VEXTRACTI128 xmm, ymm, imm8             L:   0.69ns=   2.98c  T:   0.12ns=   0.497c
+        // VINSERTI32X4 sounds really good , VPBLENDMD, 
+        // CONSTANTS - predefined index map in a register.
+
+        // Incrementing mask - simplest.
+        // Blend, as an optimized OR, good to know
+        // we only do it one at a time, but we can do better
+        // use lower cycle instrucions! like xmms!
+
+        // I need to populate 
+        // In theory, building indicies per stage (4 stages) is limited by 2 ZMMs.
+        // If we wait each time for these ZMMs we cant parallelize well.
+        // But if we "simply" build these ZMMs, we map, from each zmm into:
+        //
+        // if each time we need two zmms, maybe we can do that shit together
+        // They are contigious in memory. we can use that fact.
+        //
+        // The bitmasks vector theortically is a cast to xmm.
+        // VEXTRACTI32x4 for getting high 128 is cheap.
+        //
+        // The idea before was having 4 bitmasks. is it still easy to do?
+        // Yes. this approach allows that to be even easier. 4 grouping
+
+        // Remember that you need to map like this:
+        //
+        // (0,0)
+
+
+//4130 AVX512F             :{EVEX} VPSHUFD zmm, zmm, imm8                  L:   0.26ns=   1.13c  T:   0.12ns=   0.499c
+//4028 AVX512F             :{EVEX} VPBROADCASTD zmm, xmm                   L:   0.46ns=   1.99c  T:   0.23ns=   0.995c
+//3515 AVX512F             :{EVEX} VPORD zmm1, zmm1, zmm2                  L:   0.26ns=   1.10c  T:   0.12ns=   0.498c
+
+//3659 AVX512BW            :{EVEX} VPBLENDMB zmm{k}, zmm, zmm              L:   0.25ns=   1.07c  T:   0.06ns=   0.254c
+//3662 AVX512BW            :{EVEX} VPBLENDMW zmm{k}, zmm, zmm              L:   0.25ns=   1.07c  T:   0.06ns=   0.254c
+//3665 AVX512F             :{EVEX} VPBLENDMD zmm{k}, zmm, zmm              L:   0.25ns=   1.06c  T:   0.06ns=   0.254c
+//3668 AVX512F             :{EVEX} VPBLENDMQ zmm{k}, zmm, zmm              L:   0.25ns=   1.07c  T:   0.06ns=   0.254c
+
+//4132 AVX512F             :{EVEX} VSHUFI32X4 zmm, zmm, zmm, imm8          L:   1.16ns=   4.97c  T:   0.12ns=   0.497c
+
+/*
+4159 AVX512VL_VBMI       :{EVEX} VPERMT2B xmm, xmm, xmm                  L:   0.69ns=   2.98c  T:   0.12ns=   0.497c
+4160 AVX512VL_VBMI       :{EVEX} VPERMT2B ymm, ymm, ymm                  L:   0.92ns=   3.98c  T:   0.12ns=   0.497c
+4161 AVX512_VBMI         :{EVEX} VPERMT2B zmm, zmm, zmm                  L:   1.16ns=   4.98c  T:   0.12ns=   0.498c
+4162 AVX512VLBW          :{EVEX} VPERMT2W xmm, xmm, xmm                  L:   0.69ns=   2.98c  T:   0.12ns=   0.497c
+4163 AVX512VLBW          :{EVEX} VPERMT2W ymm, ymm, ymm                  L:   0.93ns=   3.98c  T:   0.12ns=   0.498c
+4164 AVX512BW            :{EVEX} VPERMT2W zmm, zmm, zmm                  L:   1.16ns=   4.98c  T:   0.12ns=   0.497c
+4165 AVX512VL            :{EVEX} VPERMT2D xmm, xmm, xmm                  L:   0.69ns=   2.98c  T:   0.12ns=   0.497c
+4166 AVX512VL            :{EVEX} VPERMT2D ymm, ymm, ymm                  L:   0.93ns=   3.98c  T:   0.12ns=   0.498c
+4167 AVX512F             :{EVEX} VPERMT2D zmm, zmm, zmm                  L:   1.16ns=   4.99c  T:   0.12ns=   0.497c
+4168 AVX512VL            :{EVEX} VPERMT2Q xmm, xmm, xmm                  L:   0.69ns=   2.98c  T:   0.12ns=   0.498c
+4169 AVX512VL            :{EVEX} VPERMT2Q ymm, ymm, ymm                  L:   0.92ns=   3.98c  T:   0.12ns=   0.497c
+4170 AVX512F             :{EVEX} VPERMT2Q zmm, zmm, zmm                  L:   1.16ns=   4.98c  T:   0.12ns=   0.497c
+*/
+
+            // blend dest, src1, src2
+            // if the mask is set take from src2, else src1
+
+            // Mask ops are also slow AF.
+
             //"vpbroadcastd zmm12, xmm", $zmm_src, "\n",
             //"vpmovd2m k3, zmm12\n",
             //"kandw k3, k3, k2\n",
             //"korw k1, k1, k3\n",
 
-            "mov {offset:e}, ", $idx, "\n",
-            "kmovw k", $mask, ", {offset:e}\n",
+            //"mov {offset:e}, ", $idx, "\n",
+            //"kmovw k", $mask, ", {offset:e}\n",
 
-            "vpbroadcastd zmm13 {{k", $mask, "}}, xmm", $zmm_src, "\n",
+            //"vpbroadcastd zmm13 {{k", $mask, "}}, xmm", $zmm_src, "\n",
 
-            "vpshufd xmm11, xmm", $zmm_src, ", 0x01\n",
-            "vpbroadcastd zmm13 {{k", $mask, "}}, xmm11\n", 
-            //"vpord zmm13 {{k2}}, zmm13, zmm11\n",
+            // Read from mask, write to another
+            // Perm?
+            //"vextracti32x4 xmm11, ymm", $zmm_src, ", 0x01"
+            //"vpshufd xmm11, xmm", $zmm_src, ", 0x01\n",
+            //"vpbroadcastd zmm13 {{k", $mask, "}}, xmm11\n", 
+            //"vpord zmm13 {{k", $mask, "}}, zmm13, zmm11\n",
 
-            "vpshufd xmm11, xmm", $zmm_src, ", 0x02\n",
-            "vpbroadcastd zmm14 {{k", $mask, "}}, xmm11\n", 
-            //"vpord zmm14 {{k2}}, zmm14, zmm11\n",
+            //"vpshufd xmm11, xmm", $zmm_src, ", 0x02\n",
+            //"vpbroadcastd zmm14 {{k", $mask, "}}, xmm11\n", 
+            //"vpord zmm14 {{k", $mask, "}}, zmm14, zmm11\n",
 
-            "vpshufd xmm11, xmm", $zmm_src, ", 0x03\n",
-            "vpbroadcastd zmm15 {{k", $mask, "}}, xmm11\n", 
+            //"vpshufd xmm11, xmm", $zmm_src, ", 0x03\n",
+            //"vpbroadcastd zmm15 {{k", $mask, "}}, xmm11\n", 
             //"vpord zmm15 {{k2}}, zmm15, zmm11\n",
+
+        concat!(
+            //"vpblendmd zmm15 {{k1}}, zmm15, zmm0\n",
+
+            // obviously we shouldnt get it here.
+            // now weve got words
+            // weve got indices
+            //
+            // VAND(word, line:x)
+            // VAND, VCMPEQD
+            "vpshufd xmm11, {ndx_zmm:x}, 0x01\n",
+            "vpandd xmm", $idx, ", xmm", $idx, ", xmm11\n",
+            "vextracti32x4 xmm11, ymm", $idx, ", 1\n",
+            "vpcmpeqd k1, xmm", $idx, ", xmm11\n",
+            // if i get the k1 to a gpr, i got the index
+            //"vpextrd {offset:e}, {ndx_zmm:x}, 1\n",
+            //"vextracti128 xmm13, ymm0, 1\n",
         )
     }
 }
 
+macro_rules! emit_what {
+    ($reg:expr, $lane:expr, $lane_idx:expr) => {
+        // TODO: handle zeros!!
+        concat!(
+            "vpextrd {offset:e}, {indices:x}, ", $lane_idx, "\n",
+            //"vpandnd {", $reg, "}, {", $reg, "}, {", $reg, "}\n",
+            "vmovdqa64 {", $reg, "}, [{table}+{offset}]\n",
+
+            // values = VAND(word, bitmasks)
+            "vextracti32x4 {zmm_temp:x}, {words:z}, ", $lane, "\n",
+            "vpshufd {zmm_temp:x}, {zmm_temp:x}, ", $lane_idx, "\n",
+            "vpandd {values:x}, {", $reg, ":x}, {zmm_temp:x}\n",
+            // VCMPEQ(res, expected)
+            //"valignd {zmm_temp:y}, {z", $idx, ":y}, {z", $idx, ":y}, 4\n"
+            "vextracti32x4 {zmm_temp:x}, {", $reg, ":y}, ", 1, "\n",
+            // vectorizing the little cmps, higher throughput
+            // TODO: this can use xor/sub.
+            "vpcmpeqd {k_temp}, {", $reg, ":x}, {zmm_temp:x}\n",
+            // WAW
+            "vpmovm2d {zmm_temp}, {k_temp}\n",
+            //
+            // Permute and index based on it maybe not move
+            // result[idx] = line[k+32]
+            // get the mask in binary.
+        )
+    }
+}
+
+//macro_rules! emit_thing {
+    //($idx: 
+//}
+
+#[inline(always)]
+pub unsafe fn semi_vectorized_decode(words: __m512i, indices: __m512i) {
+    // words, indices -> u32x16
+
+    // NOTE: This solution doesn't fully utilize 512-bit lane power.
+    unsafe {
+        // ... not sure if we need these
+        /*
+        let z0: __m512i; let z1: __m512i; let z2: __m512i; let z3: __m512i;
+        let z4: __m512i; let z5: __m512i; let z6: __m512i; let z7: __m512i;
+        let z8: __m512i; let z9: __m512i; let z10: __m512i; let z11: __m512i;
+        let z12: __m512i; let z13: __m512i; let z14: __m512i; let z15: __m512i;*/
+
+        let result: __m512i;
+        let t: __m512i;
+
+        // {z0} {z1} {z2} {z3} {z4} {z5} {z6} {z7} {z8} {z9} {z10} {z11} {z12} {z13} {z14} {z15}
+        arch::asm!(
+            "/* {table} {indices} {words} {offset} {zmm_temp}  {result} {k_temp} {values}*/",
+            emit_what!("cache_line", 0, 0),
+            emit_what!("cache_line", 0, 1),
+            emit_what!("cache_line", 0, 2),
+            emit_what!("cache_line", 0, 3),
+
+            "valignd {indices}, {indices}, {indices}, 4",
+            emit_what!("cache_line", 1, 0),
+            emit_what!("cache_line", 1, 1),
+            emit_what!("cache_line", 1, 2),
+            emit_what!("cache_line", 1, 3),
+
+            "valignd {indices}, {indices}, {indices}, 4",
+
+            emit_what!("cache_line", 2, 0),
+            emit_what!("cache_line", 2, 1),
+            emit_what!("cache_line", 2, 2),
+            emit_what!("cache_line", 2, 3),
+
+            "valignd {indices}, {indices}, {indices}, 4",
+
+            emit_what!("cache_line", 3, 0),
+            emit_what!("cache_line", 3, 1),
+            emit_what!("cache_line", 3, 2),
+            emit_what!("cache_line", 3, 3),
+            
+            result = out(zmm_reg) result,
+
+            table = in(reg) &_generated::ENTRIES,
+            indices = in(zmm_reg) indices,
+            words = in(zmm_reg) words,
+
+            offset = out(reg) _,
+            values = out(xmm_reg) _,
+            zmm_temp = out(zmm_reg) _,
+            k_temp = out(kreg) _,
+            
+            /*
+            z0 = out(zmm_reg) _,
+            z1 = out(zmm_reg) _,
+            z2 = out(zmm_reg) _,
+            z3 = out(zmm_reg) _,
+            z4 = out(zmm_reg) _,
+            z5 = out(zmm_reg) _,
+            z6 = out(zmm_reg) _,
+            z7 = out(zmm_reg) _,
+            z8 = out(zmm_reg) _,
+            z9 = out(zmm_reg) _,
+            z10 = out(zmm_reg) _,
+            z11 = out(zmm_reg) _,
+            z12 = out(zmm_reg) _,
+            z13 = out(zmm_reg) _,*/
+            // Can't get why the RA gives me GPR if theres pressure
+
+            // This will be renamed, it's just a WAW hazard.
+            cache_line = out(zmm_reg) _,
+        );
+
+        //debug_zmm(indices, "t");
+        //debug_zmm(t, "t");
+    }
+
+}
+
+/*
 #[inline(always)]
 pub unsafe fn playground(ndxs: __m512i, words: __m512i) {
     // ndxs -> u32x16
@@ -300,7 +499,7 @@ pub unsafe fn playground(ndxs: __m512i, words: __m512i) {
             // Remove this from here
             //"vpslld {ndx_zmm}, {ndx_zmm}, 6",
 
-            // I am almost sure these retire in 7 cycles.
+            // I am almost sure these accesses retire in 7 cycles.
             // Trying to force the CPU to "serialize" the load buffer by basically noping
             // on those zmms gave only a slight cycle increase
             "vmovd {offset:e}, {ndx_zmm:x}",
@@ -336,34 +535,33 @@ pub unsafe fn playground(ndxs: __m512i, words: __m512i) {
             "vpextrd {offset:e}, {ndx_zmm:x}, 15",
             "vmovdqa64 zmm31, [{table}+{offset}]",
             
-
+            /*
             "vpxord zmm15, zmm15, zmm15",
             "vpxord zmm14, zmm14, zmm14",
-            "vpxord zmm13, zmm13, zmm13",
+            "vpxord zmm13, zmm13, zmm13",*/
 
             /*
             "mov {offset:e}, 1",
             "kmovw k2, {offset:e}",*/
 
-            pzmm!(0, 16, 1),
-            pzmm!(1, 17, 2),
-            pzmm!(2, 18, 3),
-            pzmm!(3, 19, 4),
-            pzmm!(4, 20, 5),
-            pzmm!(5, 21, 6),
-            pzmm!(6, 22, 7),
-            //pzmm!(7, 23, 8),
-            /*
-            pzmm!(8, 24, 1),
-            pzmm!(9, 25, 2),
-            pzmm!(10, 26, 3),
-            pzmm!(11, 27, 4),
-            pzmm!(12, 28, 5),
-            pzmm!(13, 29, 6),
-            pzmm!(14, 30, 7),*/
-            //pzmm!(15, 31),
+            pzmm!(16, 1),
+            pzmm!(17, 2),
+            pzmm!(18, 3),
+            pzmm!(19, 4),
+            pzmm!(20, 5),
+            pzmm!(21, 6),
+            pzmm!(22, 7),
+            pzmm!(23, 1),
+            pzmm!(24, 1),
+            pzmm!(25, 2),
+            pzmm!(26, 3),
+            pzmm!(27, 4),
+            pzmm!(28, 5),
+            pzmm!(29, 6),
+            pzmm!(30, 7),
+            pzmm!(31, 1),
 
-            "vpmovd2m k1, zmm10",
+            //"vpmovd2m k1, zmm10",
 
             ndx_zmm = in(zmm_reg) ndxs,
             table = in(reg) &_generated::DECODER_POOL,
@@ -451,7 +649,7 @@ pub unsafe fn playground(ndxs: __m512i, words: __m512i) {
         debug_zmm(expected, "ebitmasks");
         debug_zmm(branches, "bbitmasks");*/
     }
-}
+}*/
 
 #[inline(always)]
 pub unsafe fn build_branch(ndxs: __m512i, words: __m512i) -> Branch {
@@ -464,7 +662,7 @@ pub unsafe fn build_branch(ndxs: __m512i, words: __m512i) -> Branch {
         let zero = _mm512_setzero_si512();
         //let one = _mm512_set1_epi32(1);
 
-        let decoder_table = &_generated::DECODER_POOL as *const _ as *const i32;
+        let decoder_table = &_generated::ENTRIES as *const _ as *const i32;
         // Scale by 64.
         // TODO: watch out for scale
         let ndxs = _mm512_slli_epi32(ndxs, 3);

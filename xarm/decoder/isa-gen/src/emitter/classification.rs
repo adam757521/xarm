@@ -2,6 +2,17 @@ use crate::ir;
 
 // Basically everything in here needs work.
 
+// NOTE: We basically "unlocked" a new feature now with a SIMD-friendlier design
+// That basically allows us to check complex bitmasks trivially but reduce them to a single bit
+// Each bit we add vertically we essentially degrade the balance (1/2^n)
+//
+// We should "scale vertically" in two cases:
+// - Specialization of an instruction word in a scenario that can't be differentiated (already
+// handled)
+// TODO: - Adjusting the balance of the tree to account for real world probability based on code samples
+// 
+// ARM decoding is not perfect. Lot of special cases and not balanced buckets.
+
 pub fn categorization_differentiation() {
     todo!()
     // Less handlers, which are wider.

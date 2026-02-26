@@ -43,10 +43,19 @@ fn start_test() {
 
     ];
 
+    let x_512 = unsafe {
+        let b: [u32; 16] = [
+            0x00, 0x40, 0x80, 0xC0, 0x100, 0x140, 0x180, 0x1C0,
+            0x200, 0x240, 0x280, 0x2C0, 0x300, 0x340, 0x380, 0x3C0
+        ];
+
+        _mm512_loadu_si512(b.as_ptr() as *const _)
+    };
+
     //let x = _mm512_setzero_si512();
     //let x = _mm512_set1_epi32(2);
-    let x_512 = _mm512_set1_epi32(0x40 * 1);
-    let words_512 = _mm512_set1_epi32(1123123);
+    //let x_512 = _mm512_set1_epi32(0x40 * 1);
+    let words_512 = _mm512_set1_epi32(0x123345);
     //let words_512 = black_box(_mm512_set1_epi32(0));
     //0b00001000
     //let masks_512 = _mm512_set1_epi32(0b110000000000000000000000);
@@ -81,9 +90,12 @@ fn start_test() {
     let start_cycles = unsafe { std::arch::x86_64::_rdtsc() };
 
     let iterations: usize = 01_000_000_000 / 16;
-    for _ in 0..iterations {
 
-        black_box(unsafe { playground(x_512, words_512) });
+    black_box(unsafe { semi_vectorized_decode(words_512, x_512) } );
+    for _ in 0..iterations {
+        black_box(unsafe { semi_vectorized_decode(words_512, x_512) } );
+
+        //black_box(unsafe { playground(x_512, words_512) });
         //black_box(unsafe { vpext512(words_512, x_512, 0x00FF) } );
         //black_box(unsafe { build_branch(x_512, words_512) });
 
