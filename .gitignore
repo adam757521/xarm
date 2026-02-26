@@ -3,3 +3,4 @@ env/qemu_ovmf/ovmf/OVMF_CODE.fd
 env/qemu_ovmf/ovmf/OVMF_VARS.fd
 env/disk.img
 Cargo.lock
+perf.data*
