@@ -27,23 +27,14 @@ fn const_entry(e: &Entry) -> TokenStream {
     }
 }
 
-fn emit_entries(l1_bit: u32, pool: Vec<Entry>, l1: Vec<Entry>) -> TokenStream {
+fn emit_entries(pool: Vec<Entry>) -> TokenStream {
     let pool_consts = pool.iter().map(|e| const_entry(e));
     let pool_len = pool.len();
-
-    let l1_consts = l1.iter().map(|e| const_entry(e));
-    let l1_len = l1.len();
 
     quote! {
         pub static ENTRIES: [Entry; #pool_len] = [
             #(#pool_consts),*
         ];
-
-        pub static ROOT_ENTRIES: [Entry; #l1_len] = [
-            #(#l1_consts),*
-        ];
-
-        pub static ROOT_BITMASK: u32 = #l1_bit;
     }
 }
 
@@ -60,11 +51,11 @@ impl CodeEmitter for LatencyOptimizedCodeEmitter {
 
         let patterns = instructions.iter().collect::<Vec<_>>();
         let entry_node = graph::build(&patterns);
-        let (b, pool, descriptors) = lut::build(&patterns, entry_node);
+        let pool = lut::build(&patterns, entry_node);
 
         let usage = emit_use();
         let inst_enum = instruction::emit(&patterns);
-        let descriptors = emit_entries(b, pool, descriptors);
+        let descriptors = emit_entries(pool);
         dbg!(descriptors.to_string());
         quote! {
             #usage

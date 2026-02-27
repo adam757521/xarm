@@ -51,11 +51,12 @@ fn start_test() {
 
         _mm512_loadu_si512(b.as_ptr() as *const _)
     };
+    let x_512 = _mm512_set1_epi32(0x0);
 
     //let x = _mm512_setzero_si512();
     //let x = _mm512_set1_epi32(2);
     //let x_512 = _mm512_set1_epi32(0x40 * 1);
-    let words_512 = _mm512_set1_epi32(0x123345);
+    let words_512 = _mm512_set1_epi32(0x0);
     //let words_512 = black_box(_mm512_set1_epi32(0));
     //0b00001000
     //let masks_512 = _mm512_set1_epi32(0b110000000000000000000000);
@@ -89,11 +90,11 @@ fn start_test() {
     let start = std::time::Instant::now();
     let start_cycles = unsafe { std::arch::x86_64::_rdtsc() };
 
-    let iterations: usize = 01_000_000_000 / 16;
+    let iterations: usize = 10_000_000_000 / 16;
 
-    black_box(unsafe { semi_vectorized_decode(words_512, x_512) } );
     for _ in 0..iterations {
-        black_box(unsafe { semi_vectorized_decode(words_512, x_512) } );
+        black_box(unsafe { simd_decode(words_512) } );
+        //black_box(unsafe { semi_vectorized_decode(words_512, x_512) } );
 
         //black_box(unsafe { playground(x_512, words_512) });
         //black_box(unsafe { vpext512(words_512, x_512, 0x00FF) } );
