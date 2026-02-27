@@ -165,10 +165,10 @@ pub unsafe fn scalar_decode(word: u32) -> u16 {
             // branch and lookup cases in a way thats branchless
 
             // Sweet compiler vectorized it for me
-            let e1 = ((fentry.bitmasks[0] & word == fentry.expected[0]) as u8) << 3;
-            let e2 = ((fentry.bitmasks[1] & word == fentry.expected[1]) as u8) << 2;
-            let e3 = ((fentry.bitmasks[2] & word == fentry.expected[2]) as u8) << 1;
-            let e4 = ((fentry.bitmasks[3] & word == fentry.expected[3]) as u8) << 0;
+            let e1 = ((fentry.bitmasks[0] & word == fentry.expected[0]) as u8) << 0;
+            let e2 = ((fentry.bitmasks[1] & word == fentry.expected[1]) as u8) << 1;
+            let e3 = ((fentry.bitmasks[2] & word == fentry.expected[2]) as u8) << 2;
+            let e4 = ((fentry.bitmasks[3] & word == fentry.expected[3]) as u8) << 3;
             let idx = (e1 | e2 | e3 | e4) as usize;
 
             let descriptor = fentry.entries[idx];

@@ -23,8 +23,8 @@ pub fn add_entry_as_descriptor(insts: &[&ir::Instruction], entry: &Node, descs_l
             }
 
             let mut bitmasks = [0; 4];
-            for i in 0..bits.len() {
-                bitmasks[i+(4-bits.len())] = (1 << bits[i]) as u32;
+            for i in 0..4 {
+                bitmasks[i] = bits.get(bits.len() - 1 - i).map(|b| 1 << b).unwrap_or(0);
             }
 
             let expected = bitmasks.map(|mask| if mask != 0 { mask } else { 1 });
@@ -45,8 +45,8 @@ pub fn add_entry_as_descriptor(insts: &[&ir::Instruction], entry: &Node, descs_l
             descriptors[1] = add_entry_as_descriptor(insts, then, descs_lut);
             descriptors[0] = add_entry_as_descriptor(insts, r#else, descs_lut);
             descs_lut[placeholder] = Entry {
-                bitmasks: [0, 0, 0, *bitmask],
-                expected: [1, 1, 1, *value],
+                bitmasks: [*bitmask, 0, 0, 0],
+                expected: [*value, 1, 1, 1],
                 entries: descriptors
             };
             branch_entry_descriptor
@@ -80,10 +80,9 @@ pub fn build(instructions: &[&ir::Instruction], entry_node: Node) -> (Vec<Entry>
 
     // TLB is another consideration, making a huge page for it can be nice would be nicer if we had
     // perfect hashing in that case
-
     let mut bitmasks = [0; 4];
-    for i in 0..bits.len() {
-        bitmasks[i+(4-bits.len())] = (1 << bits[i]) as u32;
+    for i in 0..4 {
+        bitmasks[i] = bits.get(bits.len() - 1 - i).map(|b| 1 << b).unwrap_or(0);
     }
 
     let expected = bitmasks.map(|mask| if mask != 0 { mask } else { 1 });

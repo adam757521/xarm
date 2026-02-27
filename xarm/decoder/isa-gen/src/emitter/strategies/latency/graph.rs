@@ -315,7 +315,7 @@ mod tests {
                     core::arch::x86_64::_pext_u32(word, bitmask)
                 };
 
-                //println!("{bitmask:032b}");
+                //println!("{index:032b}");
                 //println!("{word:032b}");
                 //println!("going through a bucket, {index:?} ");
 
@@ -347,7 +347,7 @@ mod tests {
         // HVC_A1, STRH_i_A1_off
         //let instruction_word = 0x7C1F003F;
         // SBC/SBCS
-        let instruction_word = 0b00000010110000000000000000000000;
+        let instruction_word = 0b00000010110100000000000000000000;
         // PLDW_i_A1, SETPAN_A1
         //let instruction_word = 0b11110101000101011111000000000000;
         //let instruction_word = 0xD503201F;
