@@ -90,10 +90,12 @@ fn start_test() {
     let start = std::time::Instant::now();
     let start_cycles = unsafe { std::arch::x86_64::_rdtsc() };
 
-    let iterations: usize = 10_000_000_000 / 16;
+    let iterations: usize = 1_000_000_000 / 1;
 
     for _ in 0..iterations {
-        black_box(unsafe { simd_decode(words_512) } );
+        let v = black_box(unsafe { scalar_decode(0b00000010110000000000000000000000) } );
+        let b: InstructionView = unsafe { core::mem::transmute(v) };
+        println!("{b:?}");
         //black_box(unsafe { semi_vectorized_decode(words_512, x_512) } );
 
         //black_box(unsafe { playground(x_512, words_512) });

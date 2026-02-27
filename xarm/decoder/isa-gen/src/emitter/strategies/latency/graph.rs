@@ -324,11 +324,11 @@ mod tests {
                 walk_tree(&entries[index as usize].clone().unwrap(), word)
             },
             Node::Branch { bitmask, value, then, r#else } => {
-                // why the fuck is it bitmasking with such low change? but sure.
-                println!("branching based");
                 if word & *bitmask == *value {
+                    println!("taking then branch");
                     walk_tree(then, word)
                 } else {
+                    println!("taking else branch");
                     walk_tree(r#else, word)
                 }
             }
@@ -342,10 +342,12 @@ mod tests {
         const ARM_SPEC_32: &str = "https://developer.arm.com/-/cdn-downloads/permalink/Exploration-Tools-AArch32-ISA/ISA_AArch32/ISA_AArch32_xml_A_profile-2025-12.tar.gz";
 
         let stream = crate::fetcher::arm::InstructionSpecificationStream::connect(ARM_SPEC_32).unwrap();
-        let _ = crate::parser::arm::parse_into_ir(stream);
+        let instructions = crate::parser::arm::parse_into_ir(stream);
 
         // HVC_A1, STRH_i_A1_off
-        //let instruction_word = 0b00000001010000000000000001110000;
+        //let instruction_word = 0x7C1F003F;
+        // SBC/SBCS
+        let instruction_word = 0b00000010110000000000000000000000;
         // PLDW_i_A1, SETPAN_A1
         //let instruction_word = 0b11110101000101011111000000000000;
         //let instruction_word = 0xD503201F;
@@ -353,9 +355,10 @@ mod tests {
         //let nop_instruction_word = 0b00000011001000001111000000000000;
         //let mov_i_instruction_word = 0b00000011101000000000000000000000;
         //let instruction_word = 0xE1600010;
-        //let entry = build(&instructions.iter().collect::<Vec<_>>());
+        let entry = build(&instructions.iter().collect::<Vec<_>>());
 
-        //pretty_print_bucket(&[&walk_tree(&entry, instruction_word)]);
+        pretty_print_bucket(&[&walk_tree(&entry, instruction_word)]);
+        println!("Instruction: {}", walk_tree(&entry, instruction_word).name);
         //println!("{instruction_word:032b}");
         //println!("{:032b}", instruction_word);
         //dbg!(entry_node);

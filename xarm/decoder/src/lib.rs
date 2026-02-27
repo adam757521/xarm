@@ -12,8 +12,6 @@ pub mod _generated {
 pub use _generated::InstructionView;
 use arch::x86_64::*;
 
-
-
 #[inline(never)]
 unsafe fn debug_zmm(val: __m512i, label: &str) {
     let bytes: [u8; 64] = unsafe { std::mem::transmute(val) };
@@ -91,7 +89,7 @@ macro_rules! emit_lut_lookup {
 
             "mov {offset:e}, ", $ndx, "\n", 
             "kmovd {k_temp}, {offset:e}\n",
-            // VPERMW is low throughput. Just removing this write makes it 2x faster.
+            // VPERMW is low throughput. Just removing this write makes the function 2x faster.
             // Can also use 2 ZMMs with VPERMT2W
             "vpermw {result} {{{k_temp}}}, {zmm_temp}, {", $reg, "}\n",
         )
@@ -99,7 +97,7 @@ macro_rules! emit_lut_lookup {
 }
 
 #[inline(always)]
-unsafe fn semi_vectorized_decode(words: __m512i, indices: __m512i) -> __m256i {
+unsafe fn semi_vectorized_step(words: __m512i, indices: __m512i) -> __m256i {
     // words, indices -> u32x16
 
     // TODO: this solution always uses all 16 entries.
@@ -157,42 +155,56 @@ unsafe fn semi_vectorized_decode(words: __m512i, indices: __m512i) -> __m256i {
     }
 }
 
-/*
 #[inline(always)]
-pub unsafe fn hotpath_decode_1(word: u32) -> u16 {
+pub unsafe fn scalar_decode(word: u32) -> u16 {
     unsafe {
-        let root_idx = arch::x86_64::_pext_u32(word, _generated::ROOT_BITMASK);
-        let mut fentry = _generated::ROOT_DESCS.get_unchecked(root_idx as usize);
+        let mut fentry = _generated::ENTRIES.get_unchecked(_generated::ROOT_INDEX as usize);
 
         loop {
-            match fentry {
-                Descriptor::Lookup { bitmask, entries, .. } => {
-                    let idx = arch::x86_64::_pext_u32(word, *bitmask);
-                    let next_entry = *entries.get_unchecked(idx as usize);
-                    
-                    let (tag, val) = next_entry.unpack();
-                    if tag == DescriptorEntry::LEAF {
-                        return val;
-                    }
+            // This looks dumb but is a relatively good solution to solve handling
+            // branch and lookup cases in a way thats branchless
 
-                    fentry = _generated::DECODER_POOL.get_unchecked(val as usize);
-                },
-                Descriptor::Branch { .. } => panic!(),
-                _ => core::hint::unreachable_unchecked()
+            // Sweet compiler vectorized it for me
+            let e1 = ((fentry.bitmasks[0] & word == fentry.expected[0]) as u8) << 3;
+            let e2 = ((fentry.bitmasks[1] & word == fentry.expected[1]) as u8) << 2;
+            let e3 = ((fentry.bitmasks[2] & word == fentry.expected[2]) as u8) << 1;
+            let e4 = ((fentry.bitmasks[3] & word == fentry.expected[3]) as u8) << 0;
+            let idx = (e1 | e2 | e3 | e4) as usize;
+
+            let descriptor = fentry.entries[idx];
+            if descriptor.0 & Descriptor::TAG_ENTRY == Descriptor::TAG_ENTRY {
+                fentry = _generated::ENTRIES.get_unchecked((descriptor.0 & Descriptor::MASK_DATA) as usize);
+            } else {
+                return descriptor.0;
             }
         }
     }
 }
-*/
 
 #[inline(always)]
 pub unsafe fn simd_decode(words: __m512i) -> __m256i {
-    unsafe {
-        // First iteration can obviously be optimized.
-        let entries = semi_vectorized_decode(words, _mm512_set1_epi32(_generated::ROOT_INDEX as i32 * 0x40));
+    // TODO: down side of the SIMD approach is one long guest instruction can clog the function.
+    // But if we truly optimize the step function we can just introduce pipelining guest instructions in
+    // and handing out window views.
+    //
+    // And after we do all that work, we have complete control over ILP, while if we were to use
+    // the scalar version the CPU would do all that work itself.
 
-        // TODO: implement the loop 
-        //debug_ymm(entries, "SIMD DECODE");
+    unsafe {
+        todo!("Implement the loop, correctly save the mask's state.");
+
+        // First iteration can obviously be optimized.
+        let mut entries = semi_vectorized_step(words, _mm512_set1_epi32(_generated::ROOT_INDEX as i32 * 0x40));
+        // Entry flag.
+        let mask_entry = _mm256_set1_epi16(1 << 15);
+
+        loop {
+            let entries_mask = _mm256_test_epi16_mask(entries, mask_entry);
+
+            //debug_ymm(entries, "SIMD DECODE");
+            //println!("Mask: {:016b}", mask);
+        }
+
         entries
     }
 }
