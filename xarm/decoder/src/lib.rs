@@ -99,7 +99,7 @@ macro_rules! emit_lut_lookup {
 }
 
 #[inline(always)]
-pub unsafe fn semi_vectorized_decode(words: __m512i, indices: __m512i) -> __m256i {
+unsafe fn semi_vectorized_decode(words: __m512i, indices: __m512i) -> __m256i {
     // words, indices -> u32x16
 
     // TODO: this solution always uses all 16 entries.
@@ -188,11 +188,12 @@ pub unsafe fn hotpath_decode_1(word: u32) -> u16 {
 #[inline(always)]
 pub unsafe fn simd_decode(words: __m512i) -> __m256i {
     unsafe {
-        // First iteration can be optimzid.
-        let r = semi_vectorized_decode(words, _mm512_set1_epi32(0));
+        // First iteration can obviously be optimized.
+        let entries = semi_vectorized_decode(words, _mm512_set1_epi32(_generated::ROOT_INDEX as i32 * 0x40));
+
         // TODO: implement the loop 
-        //debug_ymm(r, "SIMD DECODE");
-        r
+        //debug_ymm(entries, "SIMD DECODE");
+        entries
     }
 }
 

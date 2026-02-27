@@ -58,7 +58,7 @@ pub fn add_entry_as_descriptor(insts: &[&ir::Instruction], entry: &Node, descs_l
     }
 }
 
-pub fn build(instructions: &[&ir::Instruction], entry_node: Node) -> Vec<Entry> {
+pub fn build(instructions: &[&ir::Instruction], entry_node: Node) -> (Vec<Entry>, u16) {
     let Node::Lookup { bits, entries, .. } = entry_node else { panic!() };
 
     // Scalar Optimization:
@@ -87,12 +87,13 @@ pub fn build(instructions: &[&ir::Instruction], entry_node: Node) -> Vec<Entry> 
 
     let expected = bitmasks.map(|mask| if mask != 0 { mask } else { 1 });
 
-    entry_pool.insert(0, Entry {
+    let index = entry_pool.len() as u16;
+    entry_pool.push(Entry {
         bitmasks,
         expected,
         entries: first_level_descriptors.try_into().unwrap()
     });
-    entry_pool
+    (entry_pool, index)
 }
 
 #[cfg(test)]

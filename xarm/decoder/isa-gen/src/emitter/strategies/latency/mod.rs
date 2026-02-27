@@ -27,7 +27,7 @@ fn const_entry(e: &Entry) -> TokenStream {
     }
 }
 
-fn emit_entries(pool: Vec<Entry>) -> TokenStream {
+fn emit_entries(pool: Vec<Entry>, root_index: u16) -> TokenStream {
     let pool_consts = pool.iter().map(|e| const_entry(e));
     let pool_len = pool.len();
 
@@ -35,6 +35,8 @@ fn emit_entries(pool: Vec<Entry>) -> TokenStream {
         pub static ENTRIES: [Entry; #pool_len] = [
             #(#pool_consts),*
         ];
+
+        pub static ROOT_INDEX: u16 = #root_index;
     }
 }
 
@@ -51,12 +53,11 @@ impl CodeEmitter for LatencyOptimizedCodeEmitter {
 
         let patterns = instructions.iter().collect::<Vec<_>>();
         let entry_node = graph::build(&patterns);
-        let pool = lut::build(&patterns, entry_node);
+        let (pool, index) = lut::build(&patterns, entry_node);
 
         let usage = emit_use();
         let inst_enum = instruction::emit(&patterns);
-        let descriptors = emit_entries(pool);
-        dbg!(descriptors.to_string());
+        let descriptors = emit_entries(pool, index);
         quote! {
             #usage
 
