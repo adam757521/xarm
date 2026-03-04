@@ -1,17 +1,12 @@
-[build]
-rustflags = ["-C", "target-feature=+bmi2", "target-feature=+avx512f", "target-cpu=native"]
-
 [workspace]
 members = [
-	"boot/boot-macros",
-	"boot/boot",
-    "base/uefi",
-    "base/mm",
-    "base/amd64",
-	"xarm/decoder",
-	"xarm/decoder/isa-gen",
-	"xarm/decoder/isa-gen-nostd",
-	"xarm"
+	"driver/vmm",
+    "driver/vmm/hal/amd64",
+    "driver/vmm/hal/mm",
+    "driver/vmm/boot",
+    "xarm/frontend/decoder",
+    "xarm/frontend/decoder/isa-gen",
+    "xarm/frontend/decoder/isa-gen-nostd",
 ]
 resolver = "2"
 

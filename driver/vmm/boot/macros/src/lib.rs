@@ -48,16 +48,16 @@ pub fn entry_point(_args: TokenStream, item: TokenStream) -> TokenStream {
     let expanded = quote! {
         #input
 
-        use ::boot::_export::uefi as __uefi;
+        use ::boot::loader::_export::uefi as __uefi;
 
         __uefi::efi_main!(__uefi_boot_entry);
         fn __uefi_boot_entry(
             handle: __uefi::Handle,
             st: &mut __uefi::SystemTable
         ) -> __uefi::Result<()> {
-            let trampoline_payload = unsafe { ::boot::core::init(handle, st)? };
+            let trampoline_payload = unsafe { ::boot::loader::core::init(handle, st)? };
             unsafe {
-                ::boot::handoff::handoff(trampoline_payload, #ident);
+                ::boot::loader::handoff::handoff(trampoline_payload, #ident);
             }
         }
     };

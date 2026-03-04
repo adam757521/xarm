@@ -2,7 +2,7 @@
 set -e
 
 echo "--- Building Hypervisor EFI ---"
-cargo build --manifest-path xarm/Cargo.toml --target x86_64-unknown-uefi
+cargo build --manifest-path driver/vmm/Cargo.toml --target x86_64-unknown-uefi
 
 echo "--- Uploading to Disk Image ---"
 ./env/qemu_ovmf/upload_efi.sh \

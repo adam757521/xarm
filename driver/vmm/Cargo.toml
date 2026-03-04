@@ -1,0 +1,9 @@
+[package]
+name = "vmm"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+mm = { path = "hal/mm" }
+amd64 = { path = "hal/amd64" }
+boot = { path = "boot" }
