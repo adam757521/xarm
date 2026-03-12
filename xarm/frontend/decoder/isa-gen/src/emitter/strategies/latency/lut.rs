@@ -24,7 +24,10 @@ pub fn add_entry_as_descriptor(insts: &[&ir::Instruction], entry: &Node, descs_l
 
             let mut bitmasks = [0; 4];
             for i in 0..4 {
-                bitmasks[i] = bits.get(bits.len() - 1 - i).map(|b| 1 << b).unwrap_or(0);
+                bitmasks[i] = match (bits.len() - 1).checked_sub(i) {
+                    Some(n) => bits.get(n).map(|b| 1 << b).unwrap_or(0),
+                    None => 0
+                };
             }
 
             let expected = bitmasks.map(|mask| if mask != 0 { mask } else { 1 });
@@ -82,7 +85,10 @@ pub fn build(instructions: &[&ir::Instruction], entry_node: Node) -> (Vec<Entry>
     // perfect hashing in that case
     let mut bitmasks = [0; 4];
     for i in 0..4 {
-        bitmasks[i] = bits.get(bits.len() - 1 - i).map(|b| 1 << b).unwrap_or(0);
+        bitmasks[i] = match (bits.len() - 1).checked_sub(i) {
+            Some(n) => bits.get(n).map(|b| 1 << b).unwrap_or(0),
+            None => 0
+        };
     }
 
     let expected = bitmasks.map(|mask| if mask != 0 { mask } else { 1 });
